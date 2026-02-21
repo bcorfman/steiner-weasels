@@ -149,13 +149,13 @@ textarea:focus-visible {
   border-radius: 8px;
   overflow: auto;
   background: #f6fcff;
+  max-width: 540px;
 }
 
 canvas.field {
   display: block;
-  width: min(100%, 720px);
+  width: min(100%, 500px);
   height: auto;
-  image-rendering: pixelated;
 }
 
 .metrics {

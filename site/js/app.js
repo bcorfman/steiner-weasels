@@ -3,42 +3,10 @@ const TARGET_PADDING = 2;
 const WEASEL_CHARS = " " + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" + "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
 const STEINER_PRESETS = {
-  1: {
-    label: "Stops only",
-    foodSources: 15,
-    initialGenes: 5,
-    childrenPerGeneration: 1500,
-    allowGeneCountMutation: false,
-    allowRewire: false,
-    allowSteinerInsert: false,
-  },
-  2: {
-    label: "Stop count evolves",
-    foodSources: 15,
-    initialGenes: 3,
-    childrenPerGeneration: 1500,
-    allowGeneCountMutation: true,
-    allowRewire: false,
-    allowSteinerInsert: false,
-  },
-  3: {
-    label: "Route rewiring",
-    foodSources: 15,
-    initialGenes: 3,
-    childrenPerGeneration: 1500,
-    allowGeneCountMutation: true,
-    allowRewire: true,
-    allowSteinerInsert: false,
-  },
-  4: {
-    label: "Steiner insertion",
-    foodSources: 15,
-    initialGenes: 3,
-    childrenPerGeneration: 1500,
-    allowGeneCountMutation: true,
-    allowRewire: true,
-    allowSteinerInsert: true,
-  },
+  1: { label: "Stops only", foodSources: 15, mutationLevel: 0 },
+  2: { label: "Stop count evolves", foodSources: 15, mutationLevel: 3 },
+  3: { label: "Route rewiring", foodSources: 15, mutationLevel: 4 },
+  4: { label: "Steiner insertion", foodSources: 15, mutationLevel: 5 },
 };
 
 function randomInt(min, max) {
@@ -94,14 +62,6 @@ class DawkinsDemo {
     return out;
   }
 
-  addCharacter(source, idx) {
-    return `${source.slice(0, idx)}${randomChoice(WEASEL_CHARS)}${source.slice(idx)}`;
-  }
-
-  deleteCharacter(source, idx) {
-    return `${source.slice(0, idx)}${source.slice(idx + 1)}`;
-  }
-
   changeCharacter(source, idx) {
     return `${source.slice(0, idx)}${randomChoice(WEASEL_CHARS)}${source.slice(idx + 1)}`;
   }
@@ -114,10 +74,7 @@ class DawkinsDemo {
     }
 
     for (let i = 0; i < mutationCount; i++) {
-      if (child.length === 0) {
-        child = this.addCharacter(child, 0);
-        continue;
-      }
+      if (child.length === 0) break;
       const idx = randomInt(0, child.length - 1);
       child = this.changeCharacter(child, idx);
     }
@@ -188,6 +145,376 @@ class DawkinsDemo {
   }
 }
 
+class Point {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  rangeFrom(fromP) {
+    const xdiff = Math.abs(fromP.x - this.x);
+    const ydiff = Math.abs(fromP.y - this.y);
+    return Math.max(xdiff, ydiff) + Math.min(xdiff, ydiff) / 2;
+  }
+
+  randomIncrement(pos, scale) {
+    const offset = scale / 2.0;
+    const incr = Math.random() * scale - offset;
+    return incr + pos;
+  }
+
+  randomMove(scale) {
+    this.x = this.randomIncrement(this.x, scale);
+    this.y = this.randomIncrement(this.y, scale);
+  }
+}
+
+class Line {
+  constructor(start, end) {
+    this.start = start;
+    this.end = end;
+  }
+
+  length() {
+    return this.start.rangeFrom(this.end);
+  }
+}
+
+class Gene {
+  init(ix) {
+    this.geneIx = ix;
+    this.parentPath = -1;
+    this.corner = new Point(Math.random() * 1000, Math.random() * 1000);
+    this.corner.randomMove(100);
+    this.childPaths = [];
+  }
+
+  isRoot() { return this.parentPath === -1; }
+  isLeaf() { return this.childPaths.length === 0; }
+  isAssigned() { return !(this.isRoot() && this.isLeaf()); }
+
+  addChildPath(childGene) {
+    childGene.parentPath = this.geneIx;
+    this.childPaths.push(childGene.geneIx);
+  }
+
+  removeChildPath(childGene) {
+    childGene.parentPath = -1;
+    const childIx = this.childPaths.indexOf(childGene.geneIx);
+    if (childIx >= 0) this.childPaths.splice(childIx, 1);
+  }
+
+  copyIn(incoming) {
+    this.geneIx = incoming.geneIx;
+    this.parentPath = incoming.parentPath;
+    this.corner = new Point(incoming.corner.x, incoming.corner.y);
+    this.childPaths = [...incoming.childPaths];
+  }
+}
+
+class Dna {
+  init(nrGenes) {
+    this.genes = [];
+    for (let i = 0; i < nrGenes; i++) {
+      const g = new Gene();
+      g.init(i);
+      this.genes.push(g);
+    }
+    for (let i = 1; i < nrGenes; i++) this.genes[i - 1].addChildPath(this.genes[i]);
+  }
+
+  getGene(geneIx) {
+    const g = this.genes.find((x) => x.geneIx === geneIx);
+    if (!g) throw new Error(`Gene not found with index ${geneIx}`);
+    return g;
+  }
+
+  highestGeneIx() {
+    let maxIx = 0;
+    for (const g of this.genes) if (g.geneIx > maxIx) maxIx = g.geneIx;
+    return maxIx;
+  }
+
+  addNewGene() {
+    const newGene = new Gene();
+    newGene.init(this.highestGeneIx() + 1);
+    this.genes.push(newGene);
+    return newGene;
+  }
+
+  removeChildGeneFromParent(childIx, parentIx) {
+    const child = this.getGene(childIx);
+    const parent = this.getGene(parentIx);
+    parent.removeChildPath(child);
+  }
+
+  addChildGeneToParent(childIx, parentIx) {
+    const child = this.getGene(childIx);
+    const parent = this.getGene(parentIx);
+    parent.addChildPath(child);
+  }
+
+  moveGeneToNewParent(geneToMoveIx, newParentIx) {
+    const geneToMove = this.getGene(geneToMoveIx);
+    if (!geneToMove.isAssigned()) throw new Error("Gene to move is not assigned.");
+    if (geneToMove.isRoot()) throw new Error("Cannot move the root gene.");
+    this.removeChildGeneFromParent(geneToMoveIx, geneToMove.parentPath);
+    this.addChildGeneToParent(geneToMoveIx, newParentIx);
+  }
+
+  deleteGene(geneIx) {
+    if (geneIx === 0) throw new Error("Cannot delete root gene.");
+    const ix = this.genes.findIndex((g) => g.geneIx === geneIx);
+    if (ix === -1) throw new Error(`Gene not found with index ${geneIx}`);
+
+    const gene = this.getGene(geneIx);
+    const children = [...gene.childPaths];
+    for (const ch of children) this.moveGeneToNewParent(ch, gene.parentPath);
+
+    this.removeChildGeneFromParent(geneIx, gene.parentPath);
+    this.genes.splice(ix, 1);
+  }
+
+  isParentOrDescendent(rootIx, targetIx) {
+    const root = this.getGene(rootIx);
+    if (root.geneIx === targetIx) return true;
+    for (const childIx of root.childPaths) {
+      if (this.isParentOrDescendent(childIx, targetIx)) return true;
+    }
+    return false;
+  }
+
+  randomGene() {
+    const ix = randomInt(0, this.genes.length - 1);
+    return this.genes[ix];
+  }
+
+  corners() {
+    return this.genes.map((g) => g.corner);
+  }
+
+  paths() {
+    const pths = [];
+    for (const g of this.genes) {
+      for (const cp of g.childPaths) {
+        pths.push(new Line(g.corner, this.getGene(cp).corner));
+      }
+    }
+    return pths;
+  }
+
+  copyIn(other) {
+    this.genes = [];
+    for (const g of other.genes) {
+      const ng = new Gene();
+      ng.copyIn(g);
+      this.genes.push(ng);
+    }
+  }
+}
+
+class SWeasel {
+  constructor(mutationLevel) {
+    this.mutationLevel = mutationLevel;
+    this.isDead = false;
+  }
+
+  init(nrCorners) {
+    this.dna = new Dna();
+    this.dna.init(nrCorners);
+  }
+
+  copyIn(inWeasel) {
+    if (!this.dna) this.dna = new Dna();
+    this.dna.copyIn(inWeasel.dna);
+    this.isDead = false;
+  }
+
+  corners() { return this.dna.corners(); }
+  paths() { return this.dna.paths(); }
+
+  randomMoveCorner() {
+    const geneToMove = this.dna.randomGene();
+    geneToMove.corner.randomMove(50);
+  }
+
+  randomAddCorner() {
+    const parentGeneIx = this.dna.randomGene().geneIx;
+    const newGene = this.dna.addNewGene();
+    this.dna.addChildGeneToParent(newGene.geneIx, parentGeneIx);
+  }
+
+  randomDeleteCorner() {
+    let aGene;
+    do {
+      aGene = this.dna.randomGene();
+    } while (aGene.isRoot() || !aGene.isAssigned());
+    this.dna.deleteGene(aGene.geneIx);
+  }
+
+  randomMovePath() {
+    let geneToMove;
+    let newParent;
+    do {
+      geneToMove = this.dna.randomGene();
+    } while (geneToMove.isRoot() || !geneToMove.isAssigned());
+
+    do {
+      newParent = this.dna.randomGene();
+    } while (!newParent.isAssigned());
+
+    if (this.dna.isParentOrDescendent(geneToMove.geneIx, newParent.geneIx)) {
+      this.isDead = true;
+    } else {
+      this.dna.moveGeneToNewParent(geneToMove.geneIx, newParent.geneIx);
+    }
+  }
+
+  randomInsertCorner() {
+    let aGene;
+    let i = 0;
+    do {
+      aGene = this.dna.randomGene();
+      if (i++ > 40) break;
+    } while (aGene.isRoot() || aGene.isLeaf() || !aGene.isAssigned());
+
+    if (i <= 40) {
+      const parentGene = this.dna.getGene(aGene.parentPath);
+      const newGene = this.dna.addNewGene();
+      for (const ch of [...aGene.childPaths]) this.dna.moveGeneToNewParent(ch, newGene.geneIx);
+      this.dna.moveGeneToNewParent(aGene.geneIx, newGene.geneIx);
+      this.dna.addChildGeneToParent(newGene.geneIx, parentGene.geneIx);
+    }
+  }
+
+  mutate() {
+    const nrMutations = Math.floor(Math.random() * 3);
+    for (let i = 0; i < nrMutations; i++) {
+      const mutationType = Math.floor(Math.random() * this.mutationLevel);
+      switch (mutationType) {
+        case 0: this.randomMoveCorner(); break;
+        case 1: this.randomAddCorner(); break;
+        case 2: this.randomDeleteCorner(); break;
+        case 3: this.randomMovePath(); break;
+        case 4: this.randomInsertCorner(); break;
+        default: break;
+      }
+    }
+  }
+}
+
+class SWeaselWorld {
+  constructor(sources, mutationLevel) {
+    this.mutationLevel = mutationLevel;
+    this.foodSources = [];
+    for (let i = 0; i < sources; i++) this.foodSources.push(this.randomLocation());
+
+    this.gaussianLut = [];
+    for (let i = 0; i < 10000; i++) this.gaussianLut.push(this.gaussian(i, 0, 500));
+
+    this.fittestWeasel = new SWeasel(this.mutationLevel);
+    this.fittestWeasel.init(5);
+    this.children = [];
+  }
+
+  init() {
+    this.children = [];
+    for (let i = 0; i < 2500; i++) {
+      const child = new SWeasel(this.mutationLevel);
+      child.weaselIx = i;
+      child.copyIn(this.fittestWeasel);
+      this.children.push(child);
+    }
+  }
+
+  corners() { return this.fittestWeasel.corners(); }
+  paths() { return this.fittestWeasel.paths(); }
+
+  randomLocation() {
+    return new Point(Math.random() * 1000, Math.random() * 1000);
+  }
+
+  gaussian(x, mean, stdDev) {
+    const a = x - mean;
+    return Math.exp(-(a * a) / (2 * stdDev * stdDev));
+  }
+
+  sourceCalories(range) {
+    const idx = Math.min(this.gaussianLut.length - 1, Math.max(0, Math.floor(range)));
+    return this.gaussianLut[idx] * 15000;
+  }
+
+  caloriesSpent(weas) {
+    let cals = 0;
+    for (const p of weas.paths()) cals += p.length();
+    return cals;
+  }
+
+  caloriesAcquired(weas) {
+    let cals = 0;
+    const sources = this.foodSources.slice(0);
+
+    for (const corner of weas.corners()) {
+      sources.sort((p1, p2) => corner.rangeFrom(p1) - corner.rangeFrom(p2));
+      const closest = sources[0];
+      if (!closest) break;
+      cals += this.sourceCalories(corner.rangeFrom(closest));
+
+      const ix = sources.findIndex((p) => p.rangeFrom(closest) === 0);
+      if (ix >= 0) sources.splice(ix, 1);
+      if (sources.length === 0) break;
+    }
+
+    return cals;
+  }
+
+  netCalories(weas) {
+    if (weas.isDead) return -Infinity;
+    return this.caloriesAcquired(weas) - this.caloriesSpent(weas);
+  }
+
+  worldCycle() {
+    if (this.children.length === 0) this.init();
+
+    let maxCals = 0;
+    let maxIx = -1;
+
+    for (let i = 0; i < this.children.length; i++) {
+      this.children[i].mutate();
+      const net = this.netCalories(this.children[i]);
+      if (net > maxCals) {
+        maxCals = net;
+        maxIx = i;
+      }
+    }
+
+    if (maxIx > -1) this.fittestWeasel.copyIn(this.children[maxIx]);
+    this.children = [];
+  }
+
+  earthquake() {
+    const nrSourcesToMove = Math.floor(Math.random() * this.foodSources.length);
+    for (let i = 0; i < nrSourcesToMove; i++) {
+      const ix = Math.floor(Math.random() * this.foodSources.length);
+      do {
+        this.foodSources[ix].randomMove(300);
+      } while (!this.isInField(this.foodSources[ix]));
+    }
+  }
+
+  isInField(point) {
+    return point.x >= 0 && point.x <= 1000 && point.y >= 0 && point.y <= 1000;
+  }
+
+  parentSpentCalories() {
+    return Math.floor(this.caloriesSpent(this.fittestWeasel));
+  }
+
+  parentAcquiredCalories() {
+    return Math.floor(this.caloriesAcquired(this.fittestWeasel));
+  }
+}
+
 class SteinerDemo {
   constructor(root, scenario) {
     this.root = root;
@@ -195,23 +522,20 @@ class SteinerDemo {
     this.defaultCfg = { ...STEINER_PRESETS[scenario] };
     this.cfg = { ...this.defaultCfg };
 
-    this.gridWidth = 80;
-    this.gridHeight = 80;
-    this.cellSize = 8;
-
     this.running = false;
-    this.animationToken = null;
+    this.initialized = false;
     this.generation = 0;
+    this.timer = null;
 
     this.buildUI();
-    this.reset();
+    this.resetDefaults();
   }
 
   buildUI() {
     this.root.innerHTML = `
       <div class="control-row">
         <label>Food Sources:</label>
-        <input class="txt-num-sources" type="number" min="10" max="99" value="${this.cfg.foodSources}" />
+        <input class="txt-num-sources" type="number" min="5" max="100" value="${this.cfg.foodSources}" />
         <span>Generations: <strong class="lbl-generations">0</strong></span>
         <span class="badge">Mode: ${this.cfg.label}</span>
       </div>
@@ -222,7 +546,7 @@ class SteinerDemo {
         <span>Status: <strong class="lbl-status">Ready</strong></span>
       </div>
       <div class="canvas-shell">
-        <canvas class="field" width="640" height="640" aria-label="Steiner world"></canvas>
+        <canvas class="field" width="500" height="500" aria-label="Steiner world"></canvas>
       </div>
       <div class="control-row">
         <button class="btn-reset" type="button">Reset</button>
@@ -249,294 +573,128 @@ class SteinerDemo {
     this.root.querySelector(".btn-earthquake").addEventListener("click", () => this.earthquake());
   }
 
-  randomCell() {
-    return { x: randomInt(0, this.gridWidth - 1), y: randomInt(0, this.gridHeight - 1) };
+  resetDefaults() {
+    this.cfg = { ...this.defaultCfg };
+    this.inputSources.value = String(this.cfg.foodSources);
+    this.reset();
   }
 
-  cellDistance(a, b) {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return Math.hypot(dx, dy);
-  }
-
-  makeChainEdges(count) {
-    const edges = [];
-    for (let i = 1; i < count; i++) edges.push([i - 1, i]);
-    return edges;
-  }
-
-  normalizeEdges(edges, stopCount) {
-    const out = [];
-    const seen = new Set();
-    for (const edge of edges) {
-      const [a, b] = edge;
-      if (a === b) continue;
-      if (a < 0 || b < 0 || a >= stopCount || b >= stopCount) continue;
-      const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push([a, b]);
-    }
-    return out;
-  }
-
-  cloneGenome(genome) {
-    return {
-      stops: genome.stops.map((p) => ({ x: p.x, y: p.y })),
-      edges: genome.edges.map((e) => [e[0], e[1]]),
-    };
+  setControlsEnabled() {
+    const disabled = this.running;
+    this.inputSources.disabled = disabled;
+    this.root.querySelector(".btn-reset").disabled = disabled;
+    this.root.querySelector(".btn-defaults").disabled = disabled;
+    this.root.querySelector(".btn-run").disabled = disabled || !this.initialized;
+    this.root.querySelector(".btn-stop").disabled = !disabled || !this.initialized;
+    this.root.querySelector(".btn-earthquake").disabled = !disabled || !this.initialized;
   }
 
   reset() {
     this.stop();
+
+    let numSources = Math.floor(Number(this.inputSources.value || this.cfg.foodSources));
+    if (Number.isNaN(numSources)) numSources = this.cfg.foodSources;
+    if (numSources < 5) numSources = 5;
+    if (numSources > 100) numSources = 100;
+    this.inputSources.value = String(numSources);
+
+    this.world = new SWeaselWorld(numSources, this.cfg.mutationLevel);
     this.generation = 0;
-
-    const parsedSources = Number(this.inputSources.value);
-    this.cfg.foodSources = Number.isFinite(parsedSources)
-      ? Math.max(10, Math.min(99, parsedSources))
-      : this.cfg.foodSources;
-
-    this.food = Array.from({ length: this.cfg.foodSources }, (_, i) => ({ ...this.randomCell(), type: i }));
-
-    this.parent = {
-      stops: Array.from({ length: this.cfg.initialGenes }, () => this.randomCell()),
-      edges: this.makeChainEdges(this.cfg.initialGenes),
-    };
-
-    this.lastFitness = { spent: 0, eaten: 0, net: 0 };
+    this.initialized = true;
+    this.clearField();
+    this.drawAll();
     this.lblStatus.textContent = "Ready";
-    this.refreshMetrics();
-    this.paint();
-  }
-
-  resetDefaults() {
-    this.cfg = { ...this.defaultCfg };
-    this.inputSources.value = String(this.defaultCfg.foodSources);
-    this.reset();
-  }
-
-  mutatePosition(stop) {
-    if (Math.random() < 0.22) {
-      stop.x = Math.max(0, Math.min(this.gridWidth - 1, stop.x + randomInt(-3, 3)));
-      stop.y = Math.max(0, Math.min(this.gridHeight - 1, stop.y + randomInt(-3, 3)));
-    }
-  }
-
-  mutateGenome(parent) {
-    const g = this.cloneGenome(parent);
-
-    for (const stop of g.stops) this.mutatePosition(stop);
-
-    if (this.cfg.allowGeneCountMutation && Math.random() < 0.12) {
-      if (Math.random() < 0.5 && g.stops.length > 1) {
-        const removed = randomInt(0, g.stops.length - 1);
-        g.stops.splice(removed, 1);
-        g.edges = g.edges
-          .filter(([a, b]) => a !== removed && b !== removed)
-          .map(([a, b]) => [a > removed ? a - 1 : a, b > removed ? b - 1 : b]);
-      } else {
-        const nextIdx = g.stops.length;
-        g.stops.push(this.randomCell());
-        if (nextIdx > 0) g.edges.push([randomInt(0, nextIdx - 1), nextIdx]);
-      }
-      g.edges = this.normalizeEdges(g.edges, g.stops.length);
-      if (g.edges.length === 0 && g.stops.length > 1) g.edges = this.makeChainEdges(g.stops.length);
-    }
-
-    if (this.cfg.allowRewire && g.edges.length > 0 && g.stops.length > 2 && Math.random() < 0.2) {
-      const edgeIndex = randomInt(0, g.edges.length - 1);
-      const from = randomInt(0, g.stops.length - 1);
-      let to = randomInt(0, g.stops.length - 1);
-      if (from === to) to = (to + 1) % g.stops.length;
-      g.edges[edgeIndex] = [from, to];
-      g.edges = this.normalizeEdges(g.edges, g.stops.length);
-    }
-
-    if (this.cfg.allowSteinerInsert && g.stops.length > 1 && Math.random() < 0.14) {
-      const edge = g.edges[randomInt(0, g.edges.length - 1)] ?? [0, 1];
-      const a = g.stops[edge[0]];
-      const b = g.stops[edge[1]];
-      const mid = {
-        x: Math.max(0, Math.min(this.gridWidth - 1, Math.round((a.x + b.x) / 2) + randomInt(-2, 2))),
-        y: Math.max(0, Math.min(this.gridHeight - 1, Math.round((a.y + b.y) / 2) + randomInt(-2, 2))),
-      };
-      const newIdx = g.stops.length;
-      g.stops.push(mid);
-      g.edges.push([edge[0], newIdx], [newIdx, edge[1]]);
-      g.edges = g.edges.filter(([x, y]) => !((x === edge[0] && y === edge[1]) || (x === edge[1] && y === edge[0])));
-      g.edges = this.normalizeEdges(g.edges, g.stops.length);
-    }
-
-    return g;
-  }
-
-  evaluate(genome) {
-    if (genome.stops.length === 0) return { spent: 99999, eaten: 0, net: -99999 };
-
-    let spent = 0;
-    // Moving to and from origin also costs calories.
-    const origin = { x: 0, y: 0 };
-    spent += this.cellDistance(origin, genome.stops[0]);
-    for (const [a, b] of genome.edges) {
-      const sa = genome.stops[a];
-      const sb = genome.stops[b];
-      if (!sa || !sb) continue;
-      spent += this.cellDistance(sa, sb);
-    }
-    spent += this.cellDistance(genome.stops[genome.stops.length - 1], origin);
-
-    let eaten = 0;
-    const availableFoods = this.food.map((f, idx) => ({ idx, ...f }));
-    // Greedy nearest unique source assignment approximates one-type-per-stop consumption.
-    for (const stop of genome.stops) {
-      if (!availableFoods.length) break;
-      let bestI = 0;
-      let bestD = Infinity;
-      for (let i = 0; i < availableFoods.length; i++) {
-        const d = this.cellDistance(stop, availableFoods[i]);
-        if (d < bestD) {
-          bestD = d;
-          bestI = i;
-        }
-      }
-      eaten += Math.max(0, 98 - bestD * 2.0);
-      availableFoods.splice(bestI, 1);
-    }
-
-    // Wasted stops (beyond sources) consume resources but add no intake value.
-    const wastedStops = Math.max(0, genome.stops.length - this.food.length);
-    spent += wastedStops * 8;
-
-    // Uncovered sources reduce fitness so scenario #2 tends toward full source coverage.
-    const uncovered = Math.max(0, this.food.length - genome.stops.length);
-    spent += uncovered * 3.5;
-
-    return {
-      spent,
-      eaten,
-      net: eaten - spent,
-    };
-  }
-
-  step() {
-    this.generation += 1;
-
-    let bestGenome = this.parent;
-    let bestFitness = this.evaluate(bestGenome);
-
-    for (let i = 0; i < this.cfg.childrenPerGeneration; i++) {
-      const child = this.mutateGenome(this.parent);
-      const f = this.evaluate(child);
-      if (f.net > bestFitness.net) {
-        bestGenome = child;
-        bestFitness = f;
-      }
-    }
-
-    this.parent = bestGenome;
-    this.lastFitness = bestFitness;
-
-    this.refreshMetrics();
-    this.paint();
-  }
-
-  refreshMetrics() {
-    this.lblGenerations.textContent = String(this.generation);
-    this.lblSpent.textContent = this.lastFitness.spent.toFixed(1);
-    this.lblEaten.textContent = this.lastFitness.eaten.toFixed(1);
-    this.lblNet.textContent = this.lastFitness.net.toFixed(1);
-  }
-
-  drawGrid() {
-    const { ctx, canvas, cellSize } = this;
-    ctx.fillStyle = "#f6fcff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = "#e2ebf0";
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= canvas.width; x += cellSize) {
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, canvas.height);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= canvas.height; y += cellSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(canvas.width, y + 0.5);
-      ctx.stroke();
-    }
-  }
-
-  cellToPx(point) {
-    return {
-      x: point.x * this.cellSize + this.cellSize / 2,
-      y: point.y * this.cellSize + this.cellSize / 2,
-    };
-  }
-
-  paint() {
-    const { ctx } = this;
-    this.drawGrid();
-
-    ctx.strokeStyle = "#7b8f9b";
-    ctx.lineWidth = 1.2;
-    for (const [a, b] of this.parent.edges) {
-      const sa = this.parent.stops[a];
-      const sb = this.parent.stops[b];
-      if (!sa || !sb) continue;
-      const p1 = this.cellToPx(sa);
-      const p2 = this.cellToPx(sb);
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = "#2a9d3f";
-    for (const source of this.food) {
-      const p = this.cellToPx(source);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 3.7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.fillStyle = "#1f4c74";
-    for (const stop of this.parent.stops) {
-      const p = this.cellToPx(stop);
-      ctx.fillRect(Math.round(p.x - 2), Math.round(p.y - 2), 4, 4);
-    }
-  }
-
-  earthquake() {
-    const shiftCount = randomInt(1, Math.max(2, Math.floor(this.food.length / 4)));
-    for (let i = 0; i < shiftCount; i++) {
-      const idx = randomInt(0, this.food.length - 1);
-      this.food[idx].x = Math.max(0, Math.min(this.gridWidth - 1, this.food[idx].x + randomInt(-9, 9)));
-      this.food[idx].y = Math.max(0, Math.min(this.gridHeight - 1, this.food[idx].y + randomInt(-9, 9)));
-    }
-    this.paint();
+    this.setControlsEnabled();
   }
 
   run() {
-    if (this.running) return;
+    if (this.running || !this.initialized) return;
     this.running = true;
     this.lblStatus.textContent = "Running";
-
-    const tick = () => {
-      if (!this.running) return;
-      for (let i = 0; i < 2 && this.running; i++) this.step();
-      this.animationToken = requestAnimationFrame(tick);
-    };
-
-    this.animationToken = requestAnimationFrame(tick);
+    this.setControlsEnabled();
+    this.timer = setInterval(() => this.worldCycle(), 500);
   }
 
   stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
     this.running = false;
-    if (this.animationToken) cancelAnimationFrame(this.animationToken);
-    this.animationToken = null;
-    if (this.lblStatus.textContent !== "Ready") this.lblStatus.textContent = "Stopped";
+    if (this.initialized) this.lblStatus.textContent = "Stopped";
+    this.setControlsEnabled();
+  }
+
+  earthquake() {
+    if (!this.world) return;
+    this.world.earthquake();
+    this.clearField();
+    this.drawAll();
+  }
+
+  worldCycle() {
+    this.generation += 1;
+    this.world.worldCycle();
+    this.clearField();
+    this.drawAll();
+  }
+
+  clearField() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  scalePoint(point) {
+    const scale = this.canvas.width / 1000;
+    return { x: point.x * scale, y: point.y * scale };
+  }
+
+  drawSources() {
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeStyle = "green";
+    for (const source of this.world.foodSources) {
+      const p = this.scalePoint(source);
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI, false);
+      this.ctx.stroke();
+    }
+  }
+
+  drawCorners() {
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeStyle = "black";
+    for (const c of this.world.corners()) {
+      const p = this.scalePoint(c);
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, 2.5, 0, 2 * Math.PI, false);
+      this.ctx.stroke();
+    }
+  }
+
+  drawPaths() {
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeStyle = "black";
+    for (const l of this.world.paths()) {
+      const p1 = this.scalePoint(l.start);
+      const p2 = this.scalePoint(l.end);
+      this.ctx.beginPath();
+      this.ctx.moveTo(p1.x, p1.y);
+      this.ctx.lineTo(p2.x, p2.y);
+      this.ctx.stroke();
+    }
+  }
+
+  displayValues() {
+    const spent = this.world.parentSpentCalories();
+    const eaten = this.world.parentAcquiredCalories();
+    this.lblSpent.textContent = String(spent);
+    this.lblEaten.textContent = String(eaten);
+    this.lblNet.textContent = String(eaten - spent);
+    this.lblGenerations.textContent = String(this.generation);
+  }
+
+  drawAll() {
+    this.drawSources();
+    this.drawCorners();
+    this.drawPaths();
+    this.displayValues();
   }
 }
 
