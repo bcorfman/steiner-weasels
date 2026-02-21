@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shakespeare, Evolution, and Weasels</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <main class="page">
+    <article class="post">
+      <header class="hero">
+        <h1>Shakespeare, Evolution, and Weasels</h1>
+        <p>Interactive reconstruction in plain HTML5, CSS, and JavaScript.</p>
+      </header>
+
+      <section>
+        <h2>Scenario 1: Dawkins' Weasels</h2>
+        <div id="dawkins-demo" class="demo-card">
+          <div class="controls-row">
+            <label for="target-input">Target:</label>
+            <input id="target-input" type="text" value="Methinks it is like a weasel." />
+          </div>
+          <textarea id="dawkins-output" aria-label="Dawkins output" class="output" spellcheck="false"></textarea>
+          <div class="controls-row">
+            <button id="dawkins-reset">Reset</button>
+            <button id="dawkins-run">Run</button>
+            <button id="dawkins-stop">Stop</button>
+            <span>Generations: <strong id="dawkins-generations">0</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Scenario #1: Weasels Find Some Food Sources</h2>
+        <div id="steiner-1" class="demo-card steiner-demo" data-scenario="1"></div>
+      </section>
+
+      <section>
+        <h2>Scenario #2: Weasels Find All the Food Sources</h2>
+        <div id="steiner-2" class="demo-card steiner-demo" data-scenario="2"></div>
+      </section>
+
+      <section>
+        <h2>Scenario #3: Weasels Optimize Their Routes to Food Sources</h2>
+        <div id="steiner-3" class="demo-card steiner-demo" data-scenario="3"></div>
+      </section>
+
+      <section>
+        <h2>Scenario #4: Weasels Find Shortcuts With Steiner Points</h2>
+        <div id="steiner-4" class="demo-card steiner-demo" data-scenario="4"></div>
+      </section>
+    </article>
+  </main>
+
+  <script src="./js/app.js" type="module"></script>
+</body>
+</html>
