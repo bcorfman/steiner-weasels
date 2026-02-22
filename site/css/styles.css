@@ -68,7 +68,10 @@ h2 { margin: 24px 0 8px; font-size: 1.85rem; }
 h3 { margin: 22px 0 8px; font-size: 1.42rem; }
 
 p, li { color: #23343d; margin: 0 0 0.88rem; }
-ol { padding-left: 1.2rem; }
+ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
 section { margin-top: 0.4rem; }
 
 .notice {
