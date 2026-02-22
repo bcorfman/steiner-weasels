@@ -1,6 +1,6 @@
 # steiner_weasels
 
-Static HTML5/JS/CSS recreation of "Shakespeare, Evolution, and Weasels" with interactive demos:
+Static HTML5/JS/CSS recreation of Dudley Chapman's "Shakespeare, Evolution, and Weasels" with interactive demos:
 - Scenario 1: Dawkins-style string weasels
 - Scenario #1-#4: Steiner Weasels approximations (food sources, stops, paths, adaptation)
 
