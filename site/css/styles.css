@@ -84,11 +84,23 @@ p, li { color: #1e3348; margin: 0 0 0.88rem; }
   margin: 0.2rem 0 0.5rem 1rem;
 }
 ol {
-  list-style: decimal;
-  list-style-position: outside;
-  padding-left: 1.5rem;
+  list-style: none;
+  counter-reset: ordered-list;
+  padding-left: 0;
   margin-left: 0;
   clear: both;
+}
+ol > li {
+  counter-increment: ordered-list;
+  position: relative;
+  padding-left: 2rem;
+}
+ol > li::before {
+  content: counter(ordered-list) ". ";
+  position: absolute;
+  left: 0;
+  color: #1e3348;
+  font-variant-numeric: tabular-nums;
 }
 section { margin-top: 0.4rem; }
 section::after {
