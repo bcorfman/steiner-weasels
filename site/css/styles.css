@@ -18,7 +18,7 @@ body {
   margin: 0;
   background: radial-gradient(circle at 85% 0%, #dceff3, var(--paper) 46%);
   color: var(--ink);
-  font: 17px/1.7 "Lora", Georgia, serif;
+  font: 400 16px/1.5 "Lora", "Helvetica Neue", sans-serif;
 }
 
 .layout {
@@ -51,7 +51,7 @@ body {
 
 .hero h1 {
   margin: 4px 0 6px;
-  font: 700 clamp(1.95rem, 1.6rem + 1.45vw, 2.8rem)/1.05 "Rokkitt", Georgia, serif;
+  font: 700 clamp(1.95rem, 1.6rem + 1.45vw, 2.8rem)/1.05 "Rokkitt", "Helvetica Neue", sans-serif;
 }
 
 .lead {
@@ -60,19 +60,39 @@ body {
 }
 
 h2, h3 {
-  font-family: "Rokkitt", Georgia, serif;
+  font-family: "Rokkitt", "Helvetica Neue", sans-serif;
+  font-weight: 700;
   line-height: 1.2;
 }
 
 h2 { margin: 24px 0 8px; font-size: 1.85rem; }
 h3 { margin: 22px 0 8px; font-size: 1.42rem; }
 
-p, li { color: #23343d; margin: 0 0 0.88rem; }
+p, li { color: #1e3348; margin: 0 0 0.88rem; }
+.article-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.article-image.alignleft {
+  float: left;
+  margin: 0.2rem 1rem 0.5rem 0;
+}
+.article-image.alignright {
+  float: right;
+  margin: 0.2rem 0 0.5rem 1rem;
+}
 ol {
   list-style: decimal;
   padding-left: 1.5rem;
 }
 section { margin-top: 0.4rem; }
+section::after {
+  content: "";
+  display: block;
+  clear: both;
+}
 
 .notice {
   margin: 6px 0 20px;
@@ -185,6 +205,11 @@ canvas.field {
   .article { padding: 12px; }
   h2 { font-size: 1.48rem; }
   h3 { font-size: 1.25rem; }
+  .article-image.alignleft,
+  .article-image.alignright {
+    float: none;
+    margin: 0 0 0.6rem;
+  }
   input[type="text"] { min-width: 220px; }
   .console { min-height: 180px; }
 }
